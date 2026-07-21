@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: monolith_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: supersecretpassword
+      POSTGRES_DB: monolith_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d monolith_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: monolith_api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount your local code into the container for instant hot-reloading
+      - ./src:/app/src
+    environment:
+      - DATABASE_URL=postgresql://postgres:supersecretpassword@db:5432/monolith_dev
+    # Override CMD to add --reload for development mode
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
