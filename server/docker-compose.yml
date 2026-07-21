@@ -17,7 +17,7 @@ services:
       timeout: 5s
       retries: 5
 
-  web:
+  server:
     build: .
     container_name: monolith_api
     ports:
