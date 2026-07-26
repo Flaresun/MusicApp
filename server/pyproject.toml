@@ -9,4 +9,5 @@ dependencies = [
     "fastapi>=0.139.0",
     "pydantic-settings>=2.14.2",
     "uvicorn>=0.51.0",
+    "ytmusicapi>=1.12.1",
 ]

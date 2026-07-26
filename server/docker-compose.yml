@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: monolith_db
+    container_name: db
     restart: always
     environment:
       POSTGRES_USER: postgres
@@ -19,12 +19,13 @@ services:
 
   server:
     build: .
-    container_name: monolith_api
+    container_name: server
     ports:
       - "8000:8000"
     volumes:
       # Mount your local code into the container for instant hot-reloading
       - ./src:/app/src
+      - /app/.venv
     environment:
       - DATABASE_URL=postgresql://postgres:supersecretpassword@db:5432/monolith_dev
     # Override CMD to add --reload for development mode

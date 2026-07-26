@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Enable bytecode compilation and copy files
 ENV UV_COMPILE_BYTECODE=1
-
+ENV VIRTUAL_ENV=/app/.venv
 # Copy project dependency files first for better layer caching
 COPY pyproject.toml uv.lock ./
 
