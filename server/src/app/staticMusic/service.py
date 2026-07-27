@@ -20,12 +20,14 @@ class StaticMusicAPI():
         return list(map(lambda artist: ArtistResult(**artist),res))
 
     def getAlbum(self, albumId:str)->Optional[AlbumDetails]:
+        # Album.id
         if not albumId:
             return 
         album = self.ytmusic.get_album(albumId)
         return AlbumDetails(**album)
 
     def getNextSongs(self, currentVideoId:str)->Optional[PlaylistTracks]:
+        # Song.videoId
         if not currentVideoId:
             return
         watch_playlist =  self.ytmusic.get_watch_playlist(currentVideoId)
