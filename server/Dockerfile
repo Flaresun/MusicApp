@@ -1,5 +1,10 @@
 FROM python:3.12-slim
 
+# Install system dependencies (FFmpeg)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uv by copying it directly from the official Astral image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
