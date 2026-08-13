@@ -1,8 +1,10 @@
 import os
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional,Any, Sequence
 from psycopg_pool import AsyncConnectionPool
+import psycopg
+from psycopg.rows import dict_row
 
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
@@ -23,6 +25,35 @@ async def get_db_pool() -> AsyncConnectionPool:
         raise RuntimeError("Database pool has not been initialized.")
     return pool
 
+async def execute_query(sql: str, params: Sequence[Any] = ()) -> Any:
+    """
+    Executes a parameterized SQL query against the connection pool.
+    
+    :param sql: The SQL query string (e.g., "SELECT * FROM users WHERE id = %s")
+    :param params: A tuple or list of parameters to safely inject into the query
+    :return: List of dictionaries for SELECT / RETURNING queries, or rowcount for write operations.
+    """
+    active_pool = await get_db_pool()
+    
+    try:
+        # pool.connection() automatically manages transactions (commits on exit, rolls back on error)
+        async with active_pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(sql, params)
+                
+                # If the query returns rows (e.g., SELECT, INSERT ... RETURNING)
+                if cur.description is not None:
+                    return await cur.fetchall()
+                
+                # For non-returning write queries (UPDATE, DELETE, INSERT)
+                return cur.rowcount
+
+    except psycopg.Error as e:
+        logger.error(f"Database query error: {e} | Query: {sql} | Params: {params}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error executing query: {e}")
+        raise e
 
 async def init_db():
     """Initializes the connection pool and runs schema.sql if tables do not exist."""

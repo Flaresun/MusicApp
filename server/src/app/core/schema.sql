@@ -1,10 +1,6 @@
 -- Enable extension for UUID generation (PostgreSQL 13+)
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- ==========================================
--- 1. ENUM TYPES
--- ==========================================
-
 CREATE TYPE s3_status_enum AS ENUM (
     'PENDING',
     'PROCESSING',
@@ -18,10 +14,6 @@ CREATE TYPE rating_enum AS ENUM (
     'NEUTRAL'
 );
 
--- ==========================================
--- 2. AUTOMATED TIMESTAMP TRIGGER FUNCTION
--- ==========================================
-
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -30,9 +22,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ==========================================
--- 3. TABLES
--- ==========================================
 
 -- User Accounts & Auth
 CREATE TABLE users (
@@ -116,9 +105,6 @@ CREATE TABLE user_playback_history (
     source_context VARCHAR(50) -- e.g., 'SEARCH', 'RECOMMENDATION', 'QUEUE', 'ALBUM'
 );
 
--- ==========================================
--- 4. TRIGGERS
--- ==========================================
 
 CREATE TRIGGER update_users_updated_at
 BEFORE UPDATE ON users

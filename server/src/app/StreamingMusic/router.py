@@ -1,14 +1,13 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from app.streamingMusic.models import StreamResponseModel, TrackStatusResponse, DeleteTrackResponse
 from app.streamingMusic.service import StreamingMusicAPI
-from app.core import db_execute, db_fetch_one  # Imports global DB handler helpers
+from app.core.database import execute_query
 
 router = APIRouter(prefix="/stream", tags=["Streaming Engine"])
 
 # Initialize service with shared global DB execution handlers
 streaming_api = StreamingMusicAPI(
-    db_execute_fn=db_execute,
-    db_fetch_one_fn=db_fetch_one
+    db_execute_fn=execute_query,
 )
 
 
