@@ -1,24 +1,25 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
+from pydantic import BaseModel
 
-@dataclass
-class Album:
+
+class Album(BaseModel):
     name: str
     id: str
 
-@dataclass
-class Artist:
+
+class Artist(BaseModel):
     name: str
     id: Optional[str] = None
 
-@dataclass
-class Thumbnail:
+
+class Thumbnail(BaseModel):
     url: str
     width: int
     height: int
 
-@dataclass
-class Song:
+
+class Song(BaseModel):
     category: str
     resultType: str
     title: str
@@ -33,11 +34,10 @@ class Song:
     views: str
     isExplicit: bool
     thumbnails: List[Thumbnail]
-    year: Optional[int] = None  # Handled as Optional since it's None in your dictionary
+    year: Optional[int] = None
 
 
-@dataclass
-class ArtistResult:
+class ArtistResult(BaseModel):
     category: str
     resultType: str
     artist: str
@@ -46,19 +46,19 @@ class ArtistResult:
     shuffleId: Optional[str] = None
     radioId: Optional[str] = None
 
+
 # Albums
-@dataclass
-class DescriptionRun:
+class DescriptionRun(BaseModel):
     text: str
     url: Optional[str] = None
 
-@dataclass
-class FeedbackTokens:
+
+class FeedbackTokens(BaseModel):
     add: Optional[str] = None
     remove: Optional[str] = None
 
-@dataclass
-class Track:
+
+class Track(BaseModel):
     videoId: str
     title: str
     artists: List[Artist]
@@ -78,8 +78,8 @@ class Track:
     thumbnails: Optional[List[Thumbnail]] = None
     communityVoteStatus: Optional[str] = None
 
-@dataclass
-class AlbumVersion:
+
+class AlbumVersion(BaseModel):
     title: str
     artists: List[Artist]
     browseId: str
@@ -88,8 +88,8 @@ class AlbumVersion:
     isExplicit: bool
     type: str
 
-@dataclass
-class AlbumDetails:
+
+class AlbumDetails(BaseModel):
     title: str
     type: str
     thumbnails: List[Thumbnail]
@@ -107,14 +107,13 @@ class AlbumDetails:
     other_versions: Optional[List[AlbumVersion]] = None
 
 
-# Up next Queue 
-@dataclass
-class AlbumRef:
+# Up Next Queue
+class AlbumRef(BaseModel):
     name: str
     id: str
 
-@dataclass
-class TrackResult:
+
+class TrackResult(BaseModel):
     videoId: str
     title: str
     length: str
@@ -129,8 +128,8 @@ class TrackResult:
     feedbackTokens: Optional[Dict[str, Any]] = None
     listenAgainFeedbackTokens: Optional[Dict[str, Any]] = None
 
-@dataclass
-class PlaylistTracks:
+
+class PlaylistTracks(BaseModel):
     tracks: List[TrackResult]
     playlistId: str
     lyrics: Optional[str] = None
@@ -138,16 +137,14 @@ class PlaylistTracks:
 
 
 # Lyrics
-
-@dataclass
-class LyricLine:
+class LyricLine(BaseModel):
     text: str
     start_time: int
     end_time: int
     id: int
 
-@dataclass
-class SongLyrics:
+
+class SongLyrics(BaseModel):
     lyrics: List[LyricLine]
     source: str
     hasTimestamps: bool = True

@@ -27,6 +27,7 @@ services:
       - ./src:/app/src
       - /app/.venv
     environment:
+      - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql://postgres:supersecretpassword@db:5432/monolith_dev
     # Override CMD to add --reload for development mode
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
