@@ -17,6 +17,9 @@ class StaticMusicAPI:
             return None
         return [Song.model_validate(song) for song in res]
 
+    def getSongMetadata(self, videoId: str) -> Optional[List[Song]]:
+            return self.ytmusic.get_song(videoId).get("videoDetails")
+
     def getArtist(self, artist: str) -> Optional[List[ArtistResult]]:
         res = self._search(artist, "artists")
         if not res:

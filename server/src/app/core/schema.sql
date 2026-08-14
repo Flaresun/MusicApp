@@ -2,7 +2,7 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TYPE s3_status_enum AS ENUM (
-    'PENDING',
+    'NOT_CACHED',
     'PROCESSING',
     'READY',
     'FAILED'
@@ -67,7 +67,7 @@ CREATE TABLE tracks (
     song_genre VARCHAR(100),
     thumbnail_url TEXT,
     is_explicit BOOLEAN DEFAULT FALSE NOT NULL,
-    s3_status s3_status_enum DEFAULT 'PENDING' NOT NULL,
+    s3_status s3_status_enum DEFAULT 'NOT_CACHED' NOT NULL,
     s3_key TEXT,
     s3_url TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL

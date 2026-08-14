@@ -9,6 +9,10 @@ staticMusicAPI = StaticMusicAPI()
 def getSong(title:str):
     return staticMusicAPI.getSong(title)
 
+@router.get("/metadata/{videoId}")
+def getSongMetadata(videoId:str):
+    return staticMusicAPI.getSongMetadata(videoId)
+
 @router.get("/artist/{artist}")
 def getArtist(artist:str):
     return staticMusicAPI.getArtist(artist)

@@ -1,6 +1,6 @@
 from enum import Enum
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
+from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class S3Status(str, Enum):
@@ -35,3 +35,15 @@ class DeleteTrackResponse(BaseModel):
     youtube_id: str
     message: str
     s3_status: S3Status = S3Status.NOT_CACHED
+
+class ClientArtist(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    name: str
+    browse_id: str
+
+class ClientTrackMetadata(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    title: str
+    duration_seconds: int
+    thumbnail_url: str
+    artists: List[ClientArtist]

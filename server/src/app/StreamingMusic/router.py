@@ -1,9 +1,9 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
-from app.streamingMusic.models import StreamResponseModel, TrackStatusResponse, DeleteTrackResponse
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, status
+from app.streamingMusic.models import ClientTrackMetadata, StreamResponseModel, TrackStatusResponse, DeleteTrackResponse
 from app.streamingMusic.service import StreamingMusicAPI
 from app.core.database import execute_query
 
-router = APIRouter(prefix="/stream", tags=["Streaming Engine"])
+router = APIRouter()
 
 # Initialize service with shared global DB execution handlers
 streaming_api = StreamingMusicAPI(
@@ -11,18 +11,24 @@ streaming_api = StreamingMusicAPI(
 )
 
 
-@router.get("/resolve/{youtube_id}", response_model=StreamResponseModel)
-async def resolve_stream(youtube_id: str, background_tasks: BackgroundTasks):
+@router.post("/resolve/{youtube_id}", response_model=StreamResponseModel)
+async def resolve_stream(
+    youtube_id: str,
+    background_tasks: BackgroundTasks,
+    client_metadata: ClientTrackMetadata = Body(...)  # Body(...) makes it mandatory
+):
     """
-    Resolves audio stream for AVQueuePlayer.
+    Resolves audio stream for AVQueuePlayer using strictly typed client metadata.
     Returns S3 presigned URL if READY, or direct YouTube CDN URL + launches background worker.
     """
     try:
-        return await streaming_api.resolve_track_stream(youtube_id, background_tasks)
+        # Convert the Pydantic model to a standard dictionary to pass to our service layer
+        meta_dict = client_metadata.model_dump()
+        return await streaming_api.resolve_track_stream(youtube_id, meta_dict, background_tasks)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to resolve stream for video {youtube_id}: {str(e)}"
+            detail=f"Failed to resolve stream for video {youtube_id}"
         )
 
 
