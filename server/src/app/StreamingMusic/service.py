@@ -151,64 +151,47 @@ class StreamingMusicAPI:
 
     async def process_and_upload_hls(self, youtube_id: str, s3_key_prefix: str) -> None:
         """
-        Background Worker: Transcodes to HLS, uploads, and marks READY (or FAILED on error).
+        Background Worker Master Function:
+        1. Downloads raw best audio.
+        2. Transcodes to HLS dynamically matching source bitrate.
+        3. Uploads HLS chunks to S3.
+        4. Updates DB state.
         """
         job_id = uuid.uuid4().hex[:8]
         job_dir = self.hls_temp_dir / f"{youtube_id}_{job_id}"
         job_dir.mkdir(parents=True, exist_ok=True)
-        playlist_file = job_dir / "playlist.m3u8"
         youtube_url = f"{self.youtube_base_url}{youtube_id}"
 
         try:
-            # 1. Download and transcode
-            cmd = [
-                "yt-dlp",
-                "-f", "bestaudio/best",
-                "--external-downloader", "ffmpeg",
-                "--external-downloader-args",
-                f"ffmpeg:-loglevel error -vn -c:a aac -b:a 192k -hls_time 4 -hls_list_size 0 -hls_segment_filename seq_%03d.ts",
-                "-o", str(playlist_file),
-                youtube_url
-            ]
+            logger.info(f"Worker [{job_id}]: Downloading raw audio for {youtube_id}")
+            raw_audio_path, source_abr = await self._download_raw_audio(youtube_url, job_dir)
 
-            process = await asyncio.create_subprocess_exec(
-                *cmd, cwd=job_dir, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
+            logger.info(f"Worker [{job_id}]: Transcoding to HLS (AAC at {source_abr}k)")
+            await self._transcode_to_hls(raw_audio_path, job_dir, source_abr)
 
-            if process.returncode != 0:
-                raise RuntimeError(f"FFmpeg/yt-dlp error: {stderr.decode()}")
+            # Cleanup the heavy raw audio file from disk BEFORE uploading to S3
+            # so we only upload the HLS chunks and save container memory.
+            raw_audio_path.unlink(missing_ok=True)
 
-            # 2. Upload to S3
-            await asyncio.to_thread(self._upload_folder_to_s3, job_dir, s3_key_prefix)
+            logger.info(f"Worker [{job_id}]: Uploading HLS chunks to S3")
+            await asyncio.to_thread(self._upload_hls_folder_to_s3, job_dir, s3_key_prefix)
 
-            # 3. Success: Update DB to READY
+            # Success: Update DB to READY
             sql_success = "UPDATE tracks SET s3_status = 'READY' WHERE youtube_id = %s;"
             await self.db_execute(sql_success, (youtube_id,))
-            logger.info(f"Successfully processed and uploaded HLS chunks for {youtube_id}")
+            logger.info(f"Worker [{job_id}]: Successfully completed track {youtube_id}")
 
         except Exception as e:
-            # 4. Failure: Fallback to FAILED so it can be retried later
-            logger.error(f"Failed processing track {youtube_id}: {str(e)}")
+            # Failure: Fallback to FAILED so it can be retried later
+            logger.error(f"Worker [{job_id}] failed on track {youtube_id}: {str(e)}")
             sql_fail = "UPDATE tracks SET s3_status = 'FAILED' WHERE youtube_id = %s;"
             await self.db_execute(sql_fail, (youtube_id,))
 
         finally:
-            # 5. Cleanup local storage
+            # Always cleanup local storage
             if job_dir.exists():
                 shutil.rmtree(job_dir, ignore_errors=True)
-
-    def _upload_folder_to_s3(self, local_dir: Path, s3_prefix: str) -> None:
-            for file_path in local_dir.glob("*"):
-                if file_path.is_file():
-                    s3_key = f"{s3_prefix}/{file_path.name}"
-                    content_type = "application/x-mpegURL" if file_path.suffix == ".m3u8" else "video/MP2T"
-                    self.s3_client.upload_file(
-                        Filename=str(file_path),
-                        Bucket=self.s3_bucket_name,
-                        Key=s3_key,
-                        ExtraArgs={"ContentType": content_type}
-                )
+    
 
     def generate_s3_url(self, s3_key: str, presigned: bool = True, expires_in: int = 3600) -> str:
         """
@@ -384,3 +367,85 @@ class StreamingMusicAPI:
                 # Option B: Catch errors per artist so the rest of the stream continues
                 logger.error(f"Failed to process artist '{name}' ({browse_id}) for track {track_id}: {str(e)}")
                 continue
+
+    async def _download_raw_audio(self, youtube_url: str, job_dir: Path) -> tuple[Path, int]:
+        """
+        Downloads the best audio stream using yt-dlp natively.
+        Returns a tuple: (Path to downloaded file, target audio bitrate in kbps).
+        """
+        def _download():
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                # Save as a raw file inside the job directory
+                'outtmpl': str(job_dir / 'raw_audio.%(ext)s'),
+                'quiet': True,
+                'no_warnings': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(youtube_url, download=True)
+                
+                # Determine the exact file extension yt-dlp decided to use
+                ext = info.get('ext', 'webm')
+                downloaded_file = job_dir / f"raw_audio.{ext}"
+                
+                if not downloaded_file.exists():
+                    raise FileNotFoundError("yt-dlp finished but the raw audio file was not found.")
+
+                # Extract source audio bitrate (abr). Fallback to 192k if YouTube doesn't report it.
+                abr = info.get('abr')
+                target_abr = int(abr) if abr else 192
+                
+                return downloaded_file, target_abr
+
+        return await asyncio.to_thread(_download)
+
+    async def _transcode_to_hls(self, raw_audio_path: Path, job_dir: Path, target_abr: int) -> Path:
+        """
+        Uses FFmpeg to convert the raw audio file into an HLS playlist and chunked .ts segments.
+        """
+        playlist_file = job_dir / "playlist.m3u8"
+        
+        cmd = [
+            "ffmpeg",
+            "-y",                        # Overwrite output files without asking
+            "-i", str(raw_audio_path),   # Input file
+            "-vn",                       # Strip video/album art streams
+            "-c:a", "aac",               # Encode to AAC (required for broad HLS support)
+            "-b:a", f"{target_abr}k",    # Dynamically match the source bitrate
+            "-hls_time", "4",            # 4-second chunk size
+            "-hls_list_size", "0",       # Keep all chunks in the playlist (no rolling window)
+            "-hls_segment_filename", "seq_%03d.ts",
+            str(playlist_file)
+        ]
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd, 
+            cwd=job_dir, 
+            stdout=asyncio.subprocess.PIPE, 
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            raise RuntimeError(f"FFmpeg transcoding failed: {stderr.decode()}")
+            
+        return playlist_file
+
+    def _upload_hls_folder_to_s3(self, local_dir: Path, s3_prefix: str) -> None:
+        """
+        Synchronous helper to upload only HLS files (.m3u8 and .ts) to S3.
+        Executed inside asyncio.to_thread.
+        """
+        for file_path in local_dir.glob("*"):
+            # Explicitly filter to ONLY upload the HLS components.
+            # This protects against uploading hidden files or leftover raw files.
+            if file_path.is_file() and file_path.suffix in [".m3u8", ".ts"]:
+                s3_key = f"{s3_prefix}/{file_path.name}"
+                content_type = "application/x-mpegURL" if file_path.suffix == ".m3u8" else "video/MP2T"
+                
+                self.s3_client.upload_file(
+                    Filename=str(file_path),
+                    Bucket=self.s3_bucket_name,
+                    Key=s3_key,
+                    ExtraArgs={"ContentType": content_type}
+                )

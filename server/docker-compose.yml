@@ -26,6 +26,8 @@ services:
       # Mount your local code into the container for instant hot-reloading
       - ./src:/app/src
       - /app/.venv
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql://postgres:supersecretpassword@db:5432/monolith_dev
