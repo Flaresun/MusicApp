@@ -26,6 +26,7 @@ services:
       # Mount your local code into the container for instant hot-reloading
       - ./src:/app/src
       - /app/.venv
+      - ./ytdlp_cookies.txt:/app/ytdlp_cookies.txt
     env_file:
       - .env
     environment:

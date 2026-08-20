@@ -42,6 +42,14 @@ class StreamingMusicAPI:
         )
 
         self.youtube_base_url = "https://www.youtube.com/watch?v="
+        self.ydl_opts = {
+                    'format': 'bestaudio/best',
+                    'quiet': True,
+                    'no_warnings': True,
+                    'remote_components': 'ejs:github',
+                    #'cookiefile': '/app/ytdlp_cookies.txt',
+                    'extractor_args': {'youtube': ['player_client=default,web_embedded,-tv_downgraded']}
+                }
 
     async def get_track_status(self, youtube_id: str) -> dict:
         """
@@ -110,7 +118,7 @@ class StreamingMusicAPI:
         
         # Grab live CDN URL
         cdn_stream_url = await self.get_direct_youtube_cdn_url(youtube_id)
-        
+        logger.info(f"youtube_cdn grabbed: {cdn_stream_url}")
         generated_s3_key = f"tracks/{youtube_id}/playlist.m3u8"
 
         # Database Relational Inserts
@@ -136,14 +144,10 @@ class StreamingMusicAPI:
         Extracts just the fast CDN URL without parsing full metadata.
         """
         youtube_url = f"{self.youtube_base_url}{youtube_id}"
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'quiet': True,
-            'no_warnings': True,
-        }
+        
 
         def _extract():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
                 info = ydl.extract_info(youtube_url, download=False)
                 return info.get('url')
 
@@ -374,13 +378,9 @@ class StreamingMusicAPI:
         Returns a tuple: (Path to downloaded file, target audio bitrate in kbps).
         """
         def _download():
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                # Save as a raw file inside the job directory
-                'outtmpl': str(job_dir / 'raw_audio.%(ext)s'),
-                'quiet': True,
-                'no_warnings': True,
-            }
+            ydl_opts = self.ydl_opts.copy()
+            ydl_opts["outtmpl"] = str(job_dir / 'raw_audio.%(ext)s')
+            
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(youtube_url, download=True)
                 
